@@ -14,7 +14,7 @@ import (
 )
 
 var scanCmd = &cobra.Command{
-	Use:   "scan <path>",
+	Use:   "scan [flags] <path>",
 	Short: "Report privacy metadata without modifying files",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

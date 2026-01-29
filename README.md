@@ -31,7 +31,7 @@ go build -o bleach ./cmd/bleach
 ### Scan (read‑only)
 
 ```bash
-bleach scan <path>
+bleach scan [flags] <path>
 ```
 
 ### Scan with insights (opt‑in, inferred)
@@ -43,7 +43,7 @@ bleach scan --insights <path>
 ### Clean (writes sanitized copies)
 
 ```bash
-bleach clean <path>
+bleach clean [flags] <path>
 ```
 
 ### Clean in place

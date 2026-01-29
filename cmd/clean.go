@@ -20,7 +20,7 @@ var (
 )
 
 var cleanCmd = &cobra.Command{
-	Use:   "clean <path>",
+	Use:   "clean [flags] <path>",
 	Short: "Strip EXIF/XMP/IPTC metadata from images",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
