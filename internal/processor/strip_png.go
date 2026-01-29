@@ -70,7 +70,7 @@ func stripPNG(r io.Reader, w io.Writer, preserveICC bool) error {
 
 func shouldDropPNGChunk(chunkName string, preserveICC bool) bool {
 	switch chunkName {
-	case "tEXt", "zTXt", "iTXt", "eXIf":
+	case "tEXt", "zTXt", "iTXt", "eXIf", "tIME":
 		return true
 	case "iCCP":
 		return !preserveICC

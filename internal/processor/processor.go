@@ -30,9 +30,15 @@ func Run(ctx context.Context, root string, opts Options, updates chan<- Progress
 	}
 
 	var outputAbs string
+	var outputInsideRoot bool
 	if opts.Mode == ModeClean && !opts.InPlace && opts.OutputDir != "" {
 		if absOut, outErr := filepath.Abs(opts.OutputDir); outErr == nil {
 			outputAbs = absOut
+			absRootClean := filepath.Clean(absRoot)
+			outputClean := filepath.Clean(outputAbs)
+			if outputClean != absRootClean && isWithin(outputClean, absRootClean) {
+				outputInsideRoot = true
+			}
 		}
 	}
 
@@ -88,14 +94,26 @@ func Run(ctx context.Context, root string, opts Options, updates chan<- Progress
 	go func() {
 		defer close(jobs)
 
+		sendJob := func(job Job) error {
+			if ctx == nil {
+				jobs <- job
+				return nil
+			}
+			select {
+			case jobs <- job:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
 		if !info.IsDir() {
 			job := Job{
 				Path:    absRoot,
 				RelPath: filepath.Base(absRoot),
 				Display: filepath.Base(absRoot),
 			}
-			jobs <- job
-			producerErr <- nil
+			producerErr <- sendJob(job)
 			return
 		}
 
@@ -105,7 +123,7 @@ func Run(ctx context.Context, root string, opts Options, updates chan<- Progress
 				return walkErr
 			}
 			if d.IsDir() {
-				if outputAbs != "" {
+				if outputInsideRoot {
 					fullDir := filepath.Join(absRoot, path)
 					if isWithin(fullDir, outputAbs) {
 						return fs.SkipDir
@@ -120,10 +138,12 @@ func Run(ctx context.Context, root string, opts Options, updates chan<- Progress
 			fullPath := filepath.Join(absRoot, path)
 			display := path
 
-			jobs <- Job{
+			if err := sendJob(Job{
 				Path:    fullPath,
 				RelPath: path,
 				Display: display,
+			}); err != nil {
+				return err
 			}
 			return nil
 		})
