@@ -1,4 +1,4 @@
-# 🧼 bleach — scrub image metadata fast, safely, and beautifully
+# 🧼 bleach 
 
 **bleach** is a high‑performance CLI that removes identifying metadata (EXIF, XMP, IPTC) from images.  
 It uses a concurrency‑safe worker pool, magic‑byte sniffing (no extension trust), and atomic writes to keep your files safe.
