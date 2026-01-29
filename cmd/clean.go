@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -68,6 +69,16 @@ var cleanCmd = &cobra.Command{
 			{Label: "Space saved (bytes)", Value: fmt.Sprintf("%d", summary.BytesSaved)},
 		}
 		fmt.Fprintln(os.Stdout, tui.RenderSummary(rows))
+		if cleanInPlace {
+			fmt.Fprintln(os.Stdout, "In-place clean complete.")
+		} else {
+			outPath := outputDir
+			if abs, absErr := filepath.Abs(outputDir); absErr == nil {
+				outPath = abs
+			}
+			fmt.Fprintf(os.Stdout, "Cleaned files written to: %s\n", outPath)
+			fmt.Fprintln(os.Stdout, "Note: originals are unchanged unless --inplace is used.")
+		}
 
 		return nil
 	},
