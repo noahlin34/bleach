@@ -2,16 +2,22 @@ package processor
 
 import (
 	"bufio"
+	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 )
 
 type PngAnalysis struct {
-	HasGPS       bool
-	HasModel     bool
-	HasTimestamp bool
+	HasGPS          bool
+	HasModel        bool
+	HasTimestamp    bool
+	GPSValues       []string
+	ModelValues     []string
+	TimestampValues []string
 }
 
 func scanPNGMetadata(rs io.ReadSeeker) (PngAnalysis, error) {
@@ -57,15 +63,42 @@ func scanPNGMetadata(rs io.ReadSeeker) (PngAnalysis, error) {
 			if _, err := io.CopyN(io.Discard, br, 4); err != nil {
 				return analysis, err
 			}
-			key := extractPNGTextKey(data)
+			key, value := extractPNGText(chunkName, data)
 			if key != "" {
-				applyKeyToPngAnalysis(&analysis, key)
+				applyKeyToPngAnalysis(&analysis, key, value)
 			}
 		case "tIME":
 			analysis.HasTimestamp = true
-			if _, err := io.CopyN(io.Discard, br, int64(length)+4); err != nil {
+			if length == 7 {
+				timeData := make([]byte, 7)
+				if _, err := io.ReadFull(br, timeData); err != nil {
+					return analysis, err
+				}
+				if _, err := io.CopyN(io.Discard, br, 4); err != nil {
+					return analysis, err
+				}
+				ts := formatPNGTime(timeData)
+				if ts != "" {
+					analysis.TimestampValues = appendUnique(analysis.TimestampValues, "tIME="+ts)
+				}
+			} else {
+				if _, err := io.CopyN(io.Discard, br, int64(length)+4); err != nil {
+					return analysis, err
+				}
+			}
+		case "eXIf":
+			exifData := make([]byte, length)
+			if _, err := io.ReadFull(br, exifData); err != nil {
 				return analysis, err
 			}
+			if _, err := io.CopyN(io.Discard, br, 4); err != nil {
+				return analysis, err
+			}
+			exifAnalysis, err := analyzeExif(bytes.NewReader(exifData))
+			if err != nil {
+				return analysis, err
+			}
+			mergeExifIntoPNG(&analysis, exifAnalysis)
 		default:
 			if _, err := io.CopyN(io.Discard, br, int64(length)+4); err != nil {
 				return analysis, err
@@ -78,25 +111,103 @@ func scanPNGMetadata(rs io.ReadSeeker) (PngAnalysis, error) {
 	}
 }
 
-func extractPNGTextKey(data []byte) string {
-	idx := indexByte(data, 0)
-	if idx <= 0 {
-		return ""
+func extractPNGText(chunkType string, data []byte) (string, string) {
+	switch chunkType {
+	case "tEXt":
+		return parsePNGText(data)
+	case "zTXt":
+		return parsePNGZTxt(data)
+	case "iTXt":
+		return parsePNGiTxt(data)
+	default:
+		return "", ""
 	}
-	key := string(data[:idx])
-	return key
 }
 
-func applyKeyToPngAnalysis(analysis *PngAnalysis, key string) {
+func parsePNGText(data []byte) (string, string) {
+	idx := indexByte(data, 0)
+	if idx <= 0 {
+		return "", ""
+	}
+	key := string(data[:idx])
+	value := string(data[idx+1:])
+	return key, sanitizeValue(value)
+}
+
+func parsePNGZTxt(data []byte) (string, string) {
+	idx := indexByte(data, 0)
+	if idx <= 0 || idx+1 >= len(data) {
+		return "", ""
+	}
+	key := string(data[:idx])
+	method := data[idx+1]
+	if method != 0 {
+		return key, "compressed"
+	}
+	compressed := data[idx+2:]
+	reader, err := zlib.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return key, "compressed"
+	}
+	defer reader.Close()
+	decoded, err := io.ReadAll(reader)
+	if err != nil {
+		return key, "compressed"
+	}
+	return key, sanitizeValue(string(decoded))
+}
+
+func parsePNGiTxt(data []byte) (string, string) {
+	idx := indexByte(data, 0)
+	if idx <= 0 || idx+2 >= len(data) {
+		return "", ""
+	}
+	key := string(data[:idx])
+	compressionFlag := data[idx+1]
+	compressionMethod := data[idx+2]
+	if compressionFlag != 0 && compressionMethod != 0 {
+		return key, "compressed"
+	}
+	rest := data[idx+3:]
+	langEnd := indexByte(rest, 0)
+	if langEnd < 0 {
+		return key, ""
+	}
+	rest = rest[langEnd+1:]
+	transEnd := indexByte(rest, 0)
+	if transEnd < 0 {
+		return key, ""
+	}
+	textBytes := rest[transEnd+1:]
+	if compressionFlag == 1 {
+		reader, err := zlib.NewReader(bytes.NewReader(textBytes))
+		if err != nil {
+			return key, "compressed"
+		}
+		defer reader.Close()
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			return key, "compressed"
+		}
+		return key, sanitizeValue(string(decoded))
+	}
+	return key, sanitizeValue(string(textBytes))
+}
+
+func applyKeyToPngAnalysis(analysis *PngAnalysis, key string, value string) {
 	lower := strings.ToLower(key)
+	entry := fmtKeyValue(key, value)
 	if strings.Contains(lower, "gps") || strings.Contains(lower, "latitude") || strings.Contains(lower, "longitude") {
 		analysis.HasGPS = true
+		analysis.GPSValues = appendUnique(analysis.GPSValues, entry)
 	}
 	if strings.Contains(lower, "model") || strings.Contains(lower, "make") {
 		analysis.HasModel = true
+		analysis.ModelValues = appendUnique(analysis.ModelValues, entry)
 	}
 	if strings.Contains(lower, "date") || strings.Contains(lower, "time") {
 		analysis.HasTimestamp = true
+		analysis.TimestampValues = appendUnique(analysis.TimestampValues, entry)
 	}
 }
 
@@ -107,4 +218,39 @@ func indexByte(data []byte, b byte) int {
 		}
 	}
 	return -1
+}
+
+func formatPNGTime(data []byte) string {
+	if len(data) != 7 {
+		return ""
+	}
+	year := binary.BigEndian.Uint16(data[0:2])
+	month := data[2]
+	day := data[3]
+	hour := data[4]
+	minute := data[5]
+	second := data[6]
+	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
+}
+
+func mergeExifIntoPNG(analysis *PngAnalysis, exifAnalysis ExifAnalysis) {
+	if exifAnalysis.HasGPS {
+		analysis.HasGPS = true
+	}
+	if exifAnalysis.HasModel {
+		analysis.HasModel = true
+	}
+	if exifAnalysis.HasTimestamp {
+		analysis.HasTimestamp = true
+	}
+	analysis.GPSValues = appendUniqueSlice(analysis.GPSValues, exifAnalysis.GPSValues)
+	analysis.ModelValues = appendUniqueSlice(analysis.ModelValues, exifAnalysis.ModelValues)
+	analysis.TimestampValues = appendUniqueSlice(analysis.TimestampValues, exifAnalysis.TimestampValues)
+}
+
+func appendUniqueSlice(values []string, incoming []string) []string {
+	for _, value := range incoming {
+		values = appendUnique(values, value)
+	}
+	return values
 }
