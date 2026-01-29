@@ -12,6 +12,7 @@ type Options struct {
 	InPlace     bool
 	OutputDir   string
 	PreserveICC bool
+	Insights    bool
 }
 
 type Job struct {
@@ -29,6 +30,7 @@ type Result struct {
 	Leaks      int
 	BytesSaved int64
 	Report     []ScanDetail
+	Insights   []ScanInsight
 }
 
 type Summary struct {
@@ -40,13 +42,19 @@ type Summary struct {
 }
 
 type ScanReport struct {
-	Path    string
-	Details []ScanDetail
+	Path     string
+	Details  []ScanDetail
+	Insights []ScanInsight
 }
 
 type ScanDetail struct {
 	Category string
 	Values   []string
+}
+
+type ScanInsight struct {
+	Kind    string
+	Message string
 }
 
 type ProgressUpdate struct {

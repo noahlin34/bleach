@@ -29,7 +29,10 @@ var scanCmd = &cobra.Command{
 			close(uiDone)
 		}()
 
-		summary, reports, err := processor.Run(context.Background(), path, processor.Options{Mode: processor.ModeScan}, updates)
+		summary, reports, err := processor.Run(context.Background(), path, processor.Options{
+			Mode:     processor.ModeScan,
+			Insights: scanInsights,
+		}, updates)
 		close(updates)
 		<-uiDone
 		if err != nil {
@@ -57,6 +60,12 @@ var scanCmd = &cobra.Command{
 					fmt.Fprintf(os.Stdout, "    %s %s\n", scanBulletStyle.Render("-"), scanValueStyle.Render(value))
 				}
 			}
+			if len(report.Insights) > 0 {
+				fmt.Fprintf(os.Stdout, "  %s\n", scanInsightsStyle.Render("Insights (inferred):"))
+				for _, insight := range report.Insights {
+					fmt.Fprintf(os.Stdout, "    %s %s\n", scanBulletStyle.Render("-"), scanInsightValueStyle.Render(formatInsight(insight)))
+				}
+			}
 		}
 
 		_ = summary
@@ -64,14 +73,26 @@ var scanCmd = &cobra.Command{
 	},
 }
 
+var scanInsights bool
+
 var (
-	scanFileStyle     = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent)
-	scanCategoryStyle = lipgloss.NewStyle().Foreground(tui.ColorAccentAlt)
-	scanValueStyle    = lipgloss.NewStyle().Foreground(tui.ColorInk)
-	scanDimStyle      = lipgloss.NewStyle().Foreground(tui.ColorDim)
-	scanBulletStyle   = lipgloss.NewStyle().Foreground(tui.ColorDim)
+	scanFileStyle         = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent)
+	scanCategoryStyle     = lipgloss.NewStyle().Foreground(tui.ColorAccentAlt)
+	scanValueStyle        = lipgloss.NewStyle().Foreground(tui.ColorInk)
+	scanDimStyle          = lipgloss.NewStyle().Foreground(tui.ColorDim)
+	scanBulletStyle       = lipgloss.NewStyle().Foreground(tui.ColorDim)
+	scanInsightsStyle     = lipgloss.NewStyle().Foreground(tui.ColorWarn)
+	scanInsightValueStyle = lipgloss.NewStyle().Foreground(tui.ColorInk)
 )
 
 func init() {
+	scanCmd.Flags().BoolVar(&scanInsights, "insights", false, "explain what metadata could reveal about you")
 	rootCmd.AddCommand(scanCmd)
+}
+
+func formatInsight(insight processor.ScanInsight) string {
+	if insight.Kind == "" {
+		return insight.Message
+	}
+	return fmt.Sprintf("%s: %s", insight.Kind, insight.Message)
 }

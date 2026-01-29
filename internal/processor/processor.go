@@ -84,8 +84,8 @@ func Run(ctx context.Context, root string, opts Options, updates chan<- Progress
 					updates <- ProgressUpdate{BytesSavedDelta: res.BytesSaved}
 				}
 			}
-			if len(res.Report) > 0 || res.Supported {
-				reports = append(reports, ScanReport{Path: res.Display, Details: res.Report})
+			if len(res.Report) > 0 || len(res.Insights) > 0 || res.Supported {
+				reports = append(reports, ScanReport{Path: res.Display, Details: res.Report, Insights: res.Insights})
 			}
 		}
 	}()
@@ -212,6 +212,9 @@ func worker(ctx context.Context, jobs <-chan Job, results chan<- Result, opts Op
 				continue
 			}
 			res.Report = report
+			if opts.Insights {
+				res.Insights = buildInsights(kind, report)
+			}
 		case ModeClean:
 			leaks, err := countLeaks(file, kind)
 			if err != nil {
