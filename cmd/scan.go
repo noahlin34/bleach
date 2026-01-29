@@ -6,6 +6,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"bleach/internal/processor"
@@ -35,12 +36,27 @@ var scanCmd = &cobra.Command{
 			return err
 		}
 
-		for _, report := range reports {
-			if len(report.Categories) == 0 {
-				fmt.Fprintf(os.Stdout, "%s: none\n", report.Path)
+		for i, report := range reports {
+			if i > 0 {
+				fmt.Fprintln(os.Stdout)
+			}
+			fmt.Fprintf(os.Stdout, "%s\n", scanFileStyle.Render(report.Path))
+			if len(report.Details) == 0 {
+				fmt.Fprintf(os.Stdout, "  %s %s\n",
+					scanBulletStyle.Render("-"),
+					scanDimStyle.Render("none"),
+				)
 				continue
 			}
-			fmt.Fprintf(os.Stdout, "%s: %s\n", report.Path, joinCategories(report.Categories))
+			for _, detail := range report.Details {
+				if len(detail.Values) == 0 {
+					continue
+				}
+				fmt.Fprintf(os.Stdout, "  %s\n", scanCategoryStyle.Render(detail.Category+":"))
+				for _, value := range detail.Values {
+					fmt.Fprintf(os.Stdout, "    %s %s\n", scanBulletStyle.Render("-"), scanValueStyle.Render(value))
+				}
+			}
 		}
 
 		_ = summary
@@ -48,16 +64,13 @@ var scanCmd = &cobra.Command{
 	},
 }
 
-func joinCategories(categories []string) string {
-	out := ""
-	for i, c := range categories {
-		if i > 0 {
-			out += ", "
-		}
-		out += c
-	}
-	return out
-}
+var (
+	scanFileStyle     = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent)
+	scanCategoryStyle = lipgloss.NewStyle().Foreground(tui.ColorAccentAlt)
+	scanValueStyle    = lipgloss.NewStyle().Foreground(tui.ColorInk)
+	scanDimStyle      = lipgloss.NewStyle().Foreground(tui.ColorDim)
+	scanBulletStyle   = lipgloss.NewStyle().Foreground(tui.ColorDim)
+)
 
 func init() {
 	rootCmd.AddCommand(scanCmd)

@@ -85,7 +85,7 @@ func Run(ctx context.Context, root string, opts Options, updates chan<- Progress
 				}
 			}
 			if len(res.Report) > 0 || res.Supported {
-				reports = append(reports, ScanReport{Path: res.Display, Categories: res.Report})
+				reports = append(reports, ScanReport{Path: res.Display, Details: res.Report})
 			}
 		}
 	}()
@@ -247,51 +247,54 @@ func worker(ctx context.Context, jobs <-chan Job, results chan<- Result, opts Op
 	}
 }
 
-func scanFile(file *os.File, kind imgutil.Kind) ([]string, error) {
+func scanFile(file *os.File, kind imgutil.Kind) ([]ScanDetail, error) {
 	switch kind {
 	case imgutil.KindJPEG, imgutil.KindTIFF:
 		analysis, err := analyzeExif(file)
 		if err != nil {
 			return nil, err
 		}
-		return categoriesFromExif(analysis), nil
+		return detailsFromExif(analysis), nil
 	case imgutil.KindPNG:
 		analysis, err := scanPNGMetadata(file)
 		if err != nil {
 			return nil, err
 		}
-		return categoriesFromPNG(analysis), nil
+		return detailsFromPNG(analysis), nil
 	default:
 		return nil, nil
 	}
 }
 
-func categoriesFromExif(analysis ExifAnalysis) []string {
-	cats := []string{}
-	if analysis.HasGPS {
-		cats = append(cats, "GPS")
+func detailsFromExif(analysis ExifAnalysis) []ScanDetail {
+	details := []ScanDetail{}
+	if len(analysis.GPSValues) > 0 {
+		details = append(details, ScanDetail{Category: "GPS", Values: analysis.GPSValues})
 	}
-	if analysis.HasModel {
-		cats = append(cats, "Device Model")
+	if len(analysis.ModelValues) > 0 {
+		details = append(details, ScanDetail{Category: "Device Model", Values: analysis.ModelValues})
 	}
-	if analysis.HasTimestamp {
-		cats = append(cats, "Timestamp")
+	if len(analysis.TimestampValues) > 0 {
+		details = append(details, ScanDetail{Category: "Timestamp", Values: analysis.TimestampValues})
 	}
-	return cats
+	if len(analysis.SerialValues) > 0 {
+		details = append(details, ScanDetail{Category: "Serial Number", Values: analysis.SerialValues})
+	}
+	return details
 }
 
-func categoriesFromPNG(analysis PngAnalysis) []string {
-	cats := []string{}
-	if analysis.HasGPS {
-		cats = append(cats, "GPS")
+func detailsFromPNG(analysis PngAnalysis) []ScanDetail {
+	details := []ScanDetail{}
+	if len(analysis.GPSValues) > 0 {
+		details = append(details, ScanDetail{Category: "GPS", Values: analysis.GPSValues})
 	}
-	if analysis.HasModel {
-		cats = append(cats, "Device Model")
+	if len(analysis.ModelValues) > 0 {
+		details = append(details, ScanDetail{Category: "Device Model", Values: analysis.ModelValues})
 	}
-	if analysis.HasTimestamp {
-		cats = append(cats, "Timestamp")
+	if len(analysis.TimestampValues) > 0 {
+		details = append(details, ScanDetail{Category: "Timestamp", Values: analysis.TimestampValues})
 	}
-	return cats
+	return details
 }
 
 func countLeaks(file *os.File, kind imgutil.Kind) (int, error) {
@@ -301,12 +304,53 @@ func countLeaks(file *os.File, kind imgutil.Kind) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		return analysis.GPSCount + analysis.SerialCount, nil
+		return countExifLeaks(analysis), nil
 	case imgutil.KindPNG:
-		return 0, nil
+		analysis, err := scanPNGMetadata(file)
+		if err != nil {
+			return 0, err
+		}
+		return countPNGLeaks(analysis), nil
 	default:
 		return 0, nil
 	}
+}
+
+func countExifLeaks(analysis ExifAnalysis) int {
+	total := len(analysis.GPSValues) + len(analysis.ModelValues) + len(analysis.TimestampValues) + len(analysis.SerialValues)
+	if total > 0 {
+		return total
+	}
+	if analysis.HasGPS {
+		total++
+	}
+	if analysis.HasModel {
+		total++
+	}
+	if analysis.HasTimestamp {
+		total++
+	}
+	if analysis.SerialCount > 0 {
+		total++
+	}
+	return total
+}
+
+func countPNGLeaks(analysis PngAnalysis) int {
+	total := len(analysis.GPSValues) + len(analysis.ModelValues) + len(analysis.TimestampValues)
+	if total > 0 {
+		return total
+	}
+	if analysis.HasGPS {
+		total++
+	}
+	if analysis.HasModel {
+		total++
+	}
+	if analysis.HasTimestamp {
+		total++
+	}
+	return total
 }
 
 func cleanFile(file *os.File, job Job, kind imgutil.Kind, opts Options) (int64, error) {

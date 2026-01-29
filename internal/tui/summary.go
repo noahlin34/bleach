@@ -25,16 +25,16 @@ func RenderSummary(rows []SummaryRow) string {
 	}
 
 	hline := strings.Repeat("-", labelWidth+valueWidth+3)
-	lines := []string{hline}
+	lines := []string{dimStyle.Render(hline)}
 
 	for _, row := range rows {
 		label := padRight(row.Label, labelWidth)
 		value := padRight(row.Value, valueWidth)
-		line := fmt.Sprintf("%s | %s", labelStyle.Render(label), valueStyle.Render(value))
+		line := fmt.Sprintf("%s %s %s", labelStyle.Render(label), dimStyle.Render("|"), summaryValueStyle.Render(value))
 		lines = append(lines, line)
 	}
 
-	lines = append(lines, hline)
+	lines = append(lines, dimStyle.Render(hline))
 	return strings.Join(lines, "\n")
 }
 
@@ -46,5 +46,6 @@ func padRight(s string, width int) string {
 }
 
 var (
-	valueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
+	labelStyle        = lipgloss.NewStyle().Foreground(ColorAccentAlt)
+	summaryValueStyle = lipgloss.NewStyle().Foreground(ColorInk).Bold(true)
 )

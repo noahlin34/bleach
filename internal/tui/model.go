@@ -82,11 +82,11 @@ func (m Model) View() string {
 
 	lines := []string{
 		titleStyle.Render("bleach 🧼"),
-		labelStyle.Render(fmt.Sprintf("Files: %d/%d", m.processed, m.total)) + dimStyle.Render(fmt.Sprintf("  errors:%d", m.errors)),
-		labelStyle.Render(fmt.Sprintf("Leaks plugged: %d", m.leaks)),
-		labelStyle.Render(fmt.Sprintf("Bytes saved: %d", m.bytesSaved)),
+		fmt.Sprintf("%s %s %s", keyStyle.Render("Files"), valueStyle.Render(fmt.Sprintf("%d/%d", m.processed, m.total)), dimStyle.Render(fmt.Sprintf("errors:%d", m.errors))),
+		fmt.Sprintf("%s %s", keyStyle.Render("Leaks plugged"), valueStyle.Render(fmt.Sprintf("%d", m.leaks))),
+		fmt.Sprintf("%s %s", keyStyle.Render("Bytes saved"), valueStyle.Render(fmt.Sprintf("%d", m.bytesSaved))),
 		dimStyle.Render(fmt.Sprintf("Elapsed: %s", elapsed)),
-		barStyle.Render(bar),
+		renderBarLine(bar),
 	}
 
 	return strings.Join(lines, "\n")
@@ -110,12 +110,19 @@ func renderBar(width int, ratio float64) string {
 	if filled < 0 {
 		filled = 0
 	}
-	return "[" + strings.Repeat("=", filled) + strings.Repeat(" ", width-filled) + "]"
+	return barFillStyle.Render(strings.Repeat("=", filled)) + barEmptyStyle.Render(strings.Repeat(".", width-filled))
 }
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true)
-	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-	barStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	titleStyle      = lipgloss.NewStyle().Bold(true).Foreground(ColorAccent)
+	keyStyle        = lipgloss.NewStyle().Foreground(ColorAccentAlt)
+	valueStyle      = lipgloss.NewStyle().Foreground(ColorInk).Bold(true)
+	dimStyle        = lipgloss.NewStyle().Foreground(ColorDim)
+	barFillStyle    = lipgloss.NewStyle().Foreground(ColorAccent)
+	barEmptyStyle   = lipgloss.NewStyle().Foreground(ColorDim)
+	barBracketStyle = lipgloss.NewStyle().Foreground(ColorDim)
 )
+
+func renderBarLine(bar string) string {
+	return barBracketStyle.Render("[") + bar + barBracketStyle.Render("]")
+}

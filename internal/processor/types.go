@@ -28,7 +28,7 @@ type Result struct {
 	Err        error
 	Leaks      int
 	BytesSaved int64
-	Report     []string
+	Report     []ScanDetail
 }
 
 type Summary struct {
@@ -40,8 +40,13 @@ type Summary struct {
 }
 
 type ScanReport struct {
-	Path       string
-	Categories []string
+	Path    string
+	Details []ScanDetail
+}
+
+type ScanDetail struct {
+	Category string
+	Values   []string
 }
 
 type ProgressUpdate struct {
